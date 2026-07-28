@@ -31,6 +31,10 @@ Configuration lives in `~/.config/omarchy/shell.json`.
 |---|---|---|---|
 | `refreshIntervalSec` | integer (30–3600) | 300 | How often to re-query the Cline database (seconds) |
 
+## Preview
+
+![preview](preview.png)
+
 ## License
 
 MIT
