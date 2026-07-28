@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "id": "dizziee.cline-model-usage",
+  "name": "Cline Usage",
+  "version": "1.0.0",
+  "author": "Dizziee",
+  "license": "MIT",
+  "description": "Cline usage stats in the Omarchy bar.",
+  "kinds": ["bar-widget"],
+  "activation": "on-demand",
+  "entryPoints": {
+    "barWidget": "Widget.qml"
+  },
+  "barWidget": {
+    "displayName": "Cline Usage",
+    "description": "Shows Cline session and token usage.",
+    "category": "AI",
+    "allowMultiple": false,
+    "defaults": {
+      "refreshIntervalSec": 300
+    },
+    "schema": [
+      {
+        "key": "refreshIntervalSec",
+        "type": "integer",
+        "label": "Refresh interval (seconds)",
+        "min": 30,
+        "max": 3600,
+        "step": 30,
+        "defaultValue": 300
+      }
+    ]
+  }
+}
