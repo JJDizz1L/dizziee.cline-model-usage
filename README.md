@@ -15,9 +15,13 @@ Cline token usage stats in the Omarchy bar. Displays today, weekly, and all-time
 omarchy plugin add https://github.com/JJDizz1L/dizziee.cline-model-usage.git --enable
 ```
 
-Then place it in your bar layout with `omarchy bar plugin add dizziee.cline-model-usage [--section <left|center|right>]`.
-Suggested placement: `omarchy bar plugin add dizziee.cline-model-usage --section left`
+### Then place it in your bar layout with 
+`omarchy bar plugin add dizziee.cline-model-usage [--section <left|center|right>]`</br>
 
+Suggested placement: 
+```
+omarchy bar plugin add dizziee.cline-model-usage --section left
+```
 You can validate the plugin at any time with:
 
 ```sh
