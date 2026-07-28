@@ -5,15 +5,23 @@ Cline token usage stats in the Omarchy bar. Displays today, weekly, and all-time
 ## Requirements
 
 - Python 3
+- Cline (official) https://github.com/cline/cline
+  - AUR: `yay -S cline-cli` 
 - Cline with existing session data in `~/.cline/data/db/sessions.db`
 
 ## Installation
 
 ```sh
-git clone https://github.com/JJDizz1L/dizziee.cline-model-usage.git ~/.config/omarchy/plugins/dizziee.cline-model-usage
+omarchy plugin add https://github.com/JJDizz1L/dizziee.cline-model-usage.git --enable
 ```
 
-Then enable **Cline Usage** in the Omarchy bar widget settings.
+Then place it in your bar layout with `omarchy bar plugin add dizziee.cline-model-usage [--section <left|center|right>]`.
+
+You can validate the plugin at any time with:
+
+```sh
+omarchy plugin validate ~/.config/omarchy/plugins/dizziee.cline-model-usage
+```
 
 ## Configuration
 
