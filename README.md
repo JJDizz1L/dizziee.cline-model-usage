@@ -16,6 +16,7 @@ omarchy plugin add https://github.com/JJDizz1L/dizziee.cline-model-usage.git --e
 ```
 
 Then place it in your bar layout with `omarchy bar plugin add dizziee.cline-model-usage [--section <left|center|right>]`.
+Suggested placement: `omarchy bar plugin add dizziee.cline-model-usage --section left`
 
 You can validate the plugin at any time with:
 
@@ -24,6 +25,7 @@ omarchy plugin validate ~/.config/omarchy/plugins/dizziee.cline-model-usage
 ```
 
 ## Configuration
+Configuration lives in `~/.config/omarchy/shell.json`.
 
 | Key | Type | Default | Description |
 |---|---|---|---|
