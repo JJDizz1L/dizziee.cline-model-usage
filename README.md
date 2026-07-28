@@ -39,6 +39,12 @@ Configuration lives in `~/.config/omarchy/shell.json`.
 
 ![preview](preview.png)
 
+## Uninstall
+
+```sh
+omarchy plugin remove dizziee.cline-model-usage
+```
+
 ## License
 
 MIT
