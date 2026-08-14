@@ -41,7 +41,7 @@ def parse_iso_date(iso_string: str) -> dt.date | None:
     if not iso_string:
         return None
     try:
-        return dt.datetime.fromisoformat(iso_string.replace("Z", "+00:00")).date()
+        return dt.datetime.fromisoformat(iso_string.replace("Z", "+00:00")).astimezone().date()
     except Exception:
         return None
 
