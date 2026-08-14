@@ -30,16 +30,6 @@ Item {
 
     readonly property string scannerScriptPath: pathFromUrl(Qt.resolvedUrl("../scripts/cline_usage_scanner.py"))
 
-    FileView {
-        id: dbProbe
-        path: root.resolvePath(root.dbPath)
-        preload: true
-        watchChanges: true
-        property bool probed: false
-        onLoaded: probed = true
-        onLoadFailed: probed = true
-    }
-
     function pathFromUrl(url) {
         var value = String(url || "")
         if (value.indexOf("file://") === 0)
@@ -100,8 +90,8 @@ Item {
     }
 
     function refresh(force) {
-        if (scanner.running) return
-        if (dbProbe.probed && dbProbe.exists === false) return
+        if (scanner.running)
+            return
 
         root.refreshing = true
         scanner.command = ["python3", root.scannerScriptPath, root.resolvePath(root.dbPath)]
