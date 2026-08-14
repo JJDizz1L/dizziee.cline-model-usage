@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "dizziee.cline-model-usage",
   "name": "Cline Usage",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "Dizziee",
   "license": "MIT",
   "description": "Cline usage stats in the Omarchy bar.",

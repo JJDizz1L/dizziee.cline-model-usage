@@ -22,14 +22,19 @@ Item {
 
     property bool refreshing: clineProvider.refreshing
     property int refreshIntervalSec: Math.max(30, Number(root.setting("refreshIntervalSec", 300)))
+    property bool popupOpen: false
+    readonly property int closedRefreshIntervalSec: 900
 
     Timer {
-        interval: root.refreshIntervalSec * 1000
+        id: refreshTimer
+        interval: (root.popupOpen ? root.refreshIntervalSec : root.closedRefreshIntervalSec) * 1000
         running: true
         repeat: true
         triggeredOnStart: true
         onTriggered: root.refreshAll()
     }
+
+    onPopupOpenChanged: refreshTimer.restart()
 
     function setting(name, fallback) {
         var value = settings ? settings[name] : undefined

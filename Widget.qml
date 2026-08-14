@@ -152,6 +152,7 @@ BarWidget {
   Main {
     id: usageMain
     settings: root.settings
+    popupOpen: root.popupOpen
   }
 
   Timer {
