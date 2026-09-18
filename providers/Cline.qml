@@ -30,6 +30,16 @@ Item {
 
     readonly property string scannerScriptPath: pathFromUrl(Qt.resolvedUrl("../scripts/cline_usage_scanner.py"))
 
+    // Last-good scan result on disk: the bar chip renders it instantly at
+    // shell start with zero spawns; live scans overwrite it when changed.
+    property string lastCacheText: ""
+
+    readonly property string cachePath: {
+        var base = Quickshell.env("XDG_CACHE_HOME")
+        if (!base) base = (Quickshell.env("HOME") ?? "/home") + "/.cache"
+        return base + "/omarchy/dizziee.cline-model-usage.json"
+    }
+
     function pathFromUrl(url) {
         var value = String(url || "")
         if (value.indexOf("file://") === 0)
@@ -66,11 +76,30 @@ Item {
         }
     }
 
+    FileView {
+        id: usageCacheFile
+        path: root.cachePath
+        watchChanges: false
+        printErrors: false
+        onLoaded: {
+            root.lastCacheText = String(text() || "")
+            root.applyUsage(text())
+        }
+    }
+
     function applyUsage(content) {
         try {
             var data = JSON.parse(String(content || "{}"))
             if (!data.ready)
                 return
+
+            // One small disk write per changed result; the text guard also
+            // makes a write->load echo a no-op.
+            var text = String(content || "")
+            if (text !== "" && text !== root.lastCacheText) {
+                root.lastCacheText = text
+                try { usageCacheFile.setText(text) } catch (e) {}
+            }
 
             root.ready = true
             root.hasLocalStats = data.hasLocalStats !== false

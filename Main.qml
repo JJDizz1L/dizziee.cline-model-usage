@@ -23,12 +23,15 @@ Item {
     property bool refreshing: clineProvider.refreshing
     property int refreshIntervalSec: Math.max(30, Number(root.setting("refreshIntervalSec", 300)))
     property bool popupOpen: false
-    readonly property int closedRefreshIntervalSec: 900
 
+    // Open-only polling: a closed popup holds last-known (disk-cached) data
+    // and spawns nothing. Opens always scan immediately — via triggeredOnStart
+    // here and the widget's own open-triggered refresh (deduped by the
+    // provider's scanner-running guard) — plus manual/IPC refresh.
     Timer {
         id: refreshTimer
-        interval: (root.popupOpen ? root.refreshIntervalSec : root.closedRefreshIntervalSec) * 1000
-        running: true
+        interval: root.refreshIntervalSec * 1000
+        running: root.popupOpen
         repeat: true
         triggeredOnStart: true
         onTriggered: root.refreshAll()
