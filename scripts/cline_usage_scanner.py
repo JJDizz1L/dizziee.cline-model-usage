@@ -21,13 +21,13 @@ def date_string(value: dt.date) -> str:
     return value.strftime("%Y-%m-%d")
 
 
-def recent_date_strings() -> list[str]:
-    today = dt.datetime.now().date()
+def recent_date_strings(now: dt.datetime) -> list[str]:
+    today = now.date()
     return [date_string(today - dt.timedelta(days=offset)) for offset in range(6, -1, -1)]
 
 
-def local_date_string() -> str:
-    return date_string(dt.datetime.now().date())
+def local_date_string(now: dt.datetime) -> str:
+    return date_string(now.date())
 
 
 def number(value: Any) -> int:
@@ -46,17 +46,16 @@ def parse_iso_date(iso_string: str) -> dt.date | None:
         return None
 
 
-def scan(db_path: Path) -> dict[str, Any]:
-    today = local_date_string()
-    recent_dates = recent_date_strings()
-    recent = {day: {"date": day, "messageCount": 0} for day in recent_dates}
+def scan(db_path: Path, now: dt.datetime | None = None) -> dict[str, Any]:
+    now = now or dt.datetime.now()
+    today = local_date_string(now)
+    recent_dates = recent_date_strings(now)
+    recent = {day: {"date": day, "totalTokens": 0} for day in recent_dates}
 
-    today_prompts = 0
     today_sessions: set[str] = set()
     today_total_tokens = 0
     today_tokens_by_model: dict[str, int] = {}
 
-    total_prompts = 0
     total_sessions: set[str] = set()
     model_usage: dict[str, dict[str, int]] = {}
 
@@ -64,7 +63,7 @@ def scan(db_path: Path) -> dict[str, Any]:
         return empty_result()
 
     try:
-        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=5)
+        conn = sqlite3.connect(f"{db_path.as_uri()}?mode=ro", uri=True, timeout=5)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
@@ -77,7 +76,6 @@ def scan(db_path: Path) -> dict[str, Any]:
             FROM sessions
             WHERE is_subagent = 0
               AND started_at IS NOT NULL
-            ORDER BY started_at DESC
         """)
 
         for row in cursor:
@@ -93,9 +91,10 @@ def scan(db_path: Path) -> dict[str, Any]:
             if metadata_str:
                 try:
                     meta = json.loads(metadata_str)
-                    usage = meta.get("usage", {})
-                except json.JSONDecodeError:
-                    pass
+                except ValueError:
+                    meta = None
+                if isinstance(meta, dict) and isinstance(meta.get("usage"), dict):
+                    usage = meta["usage"]
 
             input_t = number(usage.get("inputTokens", 0))
             output_t = number(usage.get("outputTokens", 0))
@@ -107,7 +106,6 @@ def scan(db_path: Path) -> dict[str, Any]:
                 continue
 
             total_sessions.add(session_id)
-            total_prompts += 1
 
             bucket = model_usage.setdefault(model, {
                 "inputTokens": 0,
@@ -121,10 +119,9 @@ def scan(db_path: Path) -> dict[str, Any]:
             bucket["cacheCreationInputTokens"] += cache_write
 
             if day in recent:
-                recent[day]["messageCount"] += total
+                recent[day]["totalTokens"] += total
 
             if day == today:
-                today_prompts += 1
                 today_sessions.add(session_id)
                 today_total_tokens += total
                 today_tokens_by_model[model] = today_tokens_by_model.get(model, 0) + total
@@ -136,30 +133,26 @@ def scan(db_path: Path) -> dict[str, Any]:
 
     return {
         "schemaVersion": 1,
-        "todayPrompts": today_prompts,
         "todaySessions": len(today_sessions),
         "todayTotalTokens": today_total_tokens,
         "todayTokensByModel": today_tokens_by_model,
         "recentDays": [recent[day] for day in recent_dates],
         "modelUsage": model_usage,
-        "totalPrompts": total_prompts,
         "totalSessions": len(total_sessions),
         "ready": True,
         "hasLocalStats": True,
     }
 
 
-def empty_result() -> dict[str, Any]:
-    recent_dates = recent_date_strings()
+def empty_result(now: dt.datetime | None = None) -> dict[str, Any]:
+    recent_dates = recent_date_strings(now or dt.datetime.now())
     return {
         "schemaVersion": 1,
-        "todayPrompts": 0,
         "todaySessions": 0,
         "todayTotalTokens": 0,
         "todayTokensByModel": {},
-        "recentDays": [{"date": day, "messageCount": 0} for day in recent_dates],
+        "recentDays": [{"date": day, "totalTokens": 0} for day in recent_dates],
         "modelUsage": {},
-        "totalPrompts": 0,
         "totalSessions": 0,
         "ready": True,
         "hasLocalStats": False,

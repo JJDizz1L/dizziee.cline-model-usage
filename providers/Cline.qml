@@ -8,19 +8,16 @@ Item {
 
     property string providerId: "cline"
     property string providerName: "Cline"
-    property bool enabled: false
     property bool ready: false
     property bool refreshing: false
     property string usageStatusText: ""
     property string authHelpText: ""
 
-    property int todayPrompts: 0
     property int todaySessions: 0
     property int todayTotalTokens: 0
     property var todayTokensByModel: ({})
 
     property var recentDays: []
-    property int totalPrompts: 0
     property int totalSessions: 0
     property var modelUsage: ({})
 
@@ -103,13 +100,11 @@ Item {
 
             root.ready = true
             root.hasLocalStats = data.hasLocalStats !== false
-            root.todayPrompts = Math.max(0, Number(data.todayPrompts || 0))
             root.todaySessions = Math.max(0, Number(data.todaySessions || 0))
             root.todayTotalTokens = Math.max(0, Number(data.todayTotalTokens || 0))
             root.todayTokensByModel = data.todayTokensByModel || ({})
             root.recentDays = data.recentDays || []
             root.modelUsage = data.modelUsage || ({})
-            root.totalPrompts = Math.max(0, Number(data.totalPrompts || 0))
             root.totalSessions = Math.max(0, Number(data.totalSessions || 0))
         } catch (e) {
             root.usageStatusText = "Scanner error"
@@ -118,12 +113,12 @@ Item {
         }
     }
 
-    function refresh(force) {
+    function refresh() {
         if (scanner.running)
             return
 
         root.refreshing = true
-        scanner.command = ["python3", root.scannerScriptPath, root.resolvePath(root.dbPath)]
+        scanner.command = ["/usr/bin/python3", root.scannerScriptPath, root.resolvePath(root.dbPath)]
         scanner.running = true
     }
 }

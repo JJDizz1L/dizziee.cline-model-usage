@@ -1,5 +1,4 @@
 import QtQuick
-import Quickshell
 import "providers"
 
 Item {
@@ -10,63 +9,29 @@ Item {
 
     Cline {
         id: clineProvider
-        enabled: true
     }
 
-    property var providers: [clineProvider]
-    property var enabledProviders: {
-        var result = []
-        if (clineProvider.enabled) result.push(displayProvider(clineProvider))
-        return result
-    }
+    readonly property var provider: clineProvider
+    readonly property bool refreshing: clineProvider.refreshing
+    readonly property int refreshIntervalSec: Math.max(30, Number(root.setting("refreshIntervalSec", 300)))
 
-    property bool refreshing: clineProvider.refreshing
-    property int refreshIntervalSec: Math.max(30, Number(root.setting("refreshIntervalSec", 300)))
-    property bool popupOpen: false
-
-    // Open-only polling: a closed popup holds last-known (disk-cached) data
-    // and spawns nothing. Opens always scan immediately — via triggeredOnStart
-    // here and the widget's own open-triggered refresh (deduped by the
-    // provider's scanner-running guard) — plus manual/IPC refresh.
+    // Background refresh keeps the bar chip current. Each scan is a read-only
+    // query of about 50 ms, so the interval is the only steady-state cost.
     Timer {
-        id: refreshTimer
         interval: root.refreshIntervalSec * 1000
-        running: root.popupOpen
+        running: true
         repeat: true
         triggeredOnStart: true
         onTriggered: root.refreshAll()
     }
-
-    onPopupOpenChanged: refreshTimer.restart()
 
     function setting(name, fallback) {
         var value = settings ? settings[name] : undefined
         return value === undefined || value === null ? fallback : value
     }
 
-    function displayProvider(provider) {
-        return {
-            providerId: provider.providerId,
-            providerName: provider.providerName,
-            providerIcon: provider.providerIcon,
-            enabled: provider.enabled,
-            ready: provider.ready,
-            refreshing: provider.refreshing,
-            lastRefreshedAtMs: provider.lastRefreshedAtMs,
-            usageStatusText: provider.usageStatusText,
-            authHelpText: provider.authHelpText,
-            todaySessions: provider.todaySessions,
-            todayTotalTokens: provider.todayTotalTokens,
-            todayTokensByModel: provider.todayTokensByModel,
-            recentDays: provider.recentDays,
-            totalSessions: provider.totalSessions,
-            modelUsage: provider.modelUsage,
-            hasLocalStats: provider.hasLocalStats
-        }
-    }
-
-    function refreshAll(force) {
-        clineProvider.refresh(force === true)
+    function refreshAll() {
+        clineProvider.refresh()
     }
 
     function formatTokenCount(n) {

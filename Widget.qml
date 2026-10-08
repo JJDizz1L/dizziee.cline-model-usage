@@ -22,12 +22,10 @@ BarWidget {
   readonly property color urgent: bar ? bar.urgent : Color.urgent
   readonly property color dim: Qt.darker(foreground, 1.45)
   readonly property color card: Qt.rgba(foreground.r, foreground.g, foreground.b, 0.055)
-  readonly property color cardHover: Qt.rgba(foreground.r, foreground.g, foreground.b, 0.085)
-  readonly property color outline: Qt.rgba(foreground.r, foreground.g, foreground.b, 0.18)
   readonly property color track: Qt.rgba(foreground.r, foreground.g, foreground.b, 0.24)
   readonly property string fontFamily: bar ? bar.fontFamily : "JetBrainsMono Nerd Font"
 
-  readonly property var provider: usageMain.enabledProviders.length > 0 ? usageMain.enabledProviders[0] : null
+  readonly property var provider: usageMain.provider
 
   function close() {
     popupOpen = false
@@ -55,7 +53,7 @@ BarWidget {
   function triggerRefresh() {
     refreshFlash = true
     refreshFlashTimer.restart()
-    usageMain.refreshAll(true)
+    usageMain.refreshAll()
   }
 
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)) }
@@ -106,30 +104,14 @@ BarWidget {
     } else {
       settingsStatusText = "Saved for this session"
     }
-    usageMain.refreshAll(true)
-  }
-
-  function colorChannelLuminance(value) {
-    var channel = Number(value)
-    if (!isFinite(channel)) return 0
-    return channel <= 0.03928 ? channel / 12.92 : Math.pow((channel + 0.055) / 1.055, 2.4)
-  }
-
-  function colorLuminance(color) {
-    return 0.2126 * colorChannelLuminance(color.r)
-      + 0.7152 * colorChannelLuminance(color.g)
-      + 0.0722 * colorChannelLuminance(color.b)
+    usageMain.refreshAll()
   }
 
   function iconSource() {
     return Qt.resolvedUrl("assets/cline.svg")
   }
 
-  function usagePercent() {
-    return -1
-  }
-
-  function formatUsagePercent() {
+  function chipLabel() {
     var toks = provider ? (provider.todayTotalTokens || 0) : 0
     if (toks <= 0) return ""
     return usageMain.formatTokenCount(toks)
@@ -152,7 +134,6 @@ BarWidget {
   Main {
     id: usageMain
     settings: root.settings
-    popupOpen: root.popupOpen
   }
 
   Timer {
@@ -180,7 +161,6 @@ BarWidget {
     id: chip
 
     readonly property bool compact: root.vertical
-    readonly property bool tooltipHovered: mouseArea.containsMouse
 
     width: compact ? root.barSize : chipRow.implicitWidth
     height: compact ? Math.max(root.barSize, chipColumn.implicitHeight + Style.space(2)) : root.barSize
@@ -202,7 +182,7 @@ BarWidget {
       }
 
       Text {
-        text: root.formatUsagePercent()
+        text: root.chipLabel()
         color: foreground
         font.family: fontFamily
         font.pixelSize: 10
@@ -228,16 +208,6 @@ BarWidget {
         anchors.horizontalCenter: parent.horizontalCenter
       }
 
-      Text {
-        visible: false
-        width: root.barSize
-        text: root.formatUsagePercent()
-        color: foreground
-        font.family: fontFamily
-        font.pixelSize: 10
-        font.bold: true
-        horizontalAlignment: Text.AlignHCenter
-      }
     }
 
     property var registeredBar: null
@@ -274,7 +244,6 @@ BarWidget {
 
   component EmptyUsageChip: Item {
     id: emptyChip
-    readonly property bool tooltipHovered: emptyMouse.containsMouse
     visible: !provider
     width: root.vertical ? root.barSize : emptyLabel.implicitWidth
     height: root.barSize
@@ -404,7 +373,7 @@ BarWidget {
               visible: !root.settingsMode && (!root.provider || !root.provider.hasLocalStats)
               Layout.fillWidth: true
               Layout.topMargin: 24
-              text: "No usage data yet. Start an Cline session to see stats."
+              text: "No usage data yet. Start a Cline session to see stats."
               color: dim
               font.family: fontFamily
               font.pixelSize: 11
@@ -514,7 +483,7 @@ BarWidget {
 
         Text {
           Layout.fillWidth: true
-          text: "How often the widget rescans the cline database."
+          text: "How often usage is rescanned in the background."
           color: dim
           font.family: fontFamily
           font.pixelSize: 10
@@ -641,7 +610,7 @@ BarWidget {
   component WeekCard: SectionCard {
     property var provider: null
     visible: !!provider && provider.recentDays && provider.recentDays.length > 0
-               && provider.recentDays.some(function(d) { return d.messageCount > 0 })
+               && provider.recentDays.some(function(d) { return d.totalTokens > 0 })
     title: "Last 7 Days"
 
     ColumnLayout {
@@ -653,11 +622,11 @@ BarWidget {
           required property var modelData
           Layout.fillWidth: true
           spacing: 8
-          readonly property real count: modelData ? Number(modelData.messageCount || 0) : 0
+          readonly property real count: modelData ? Number(modelData.totalTokens || 0) : 0
           readonly property real maxCount: {
             var days = provider ? (provider.recentDays || []) : []
             var max = 1
-            for (var i = 0; i < days.length; i++) if (Number(days[i].messageCount || 0) > max) max = Number(days[i].messageCount || 0)
+            for (var i = 0; i < days.length; i++) if (Number(days[i].totalTokens || 0) > max) max = Number(days[i].totalTokens || 0)
             return max
           }
           Text {
