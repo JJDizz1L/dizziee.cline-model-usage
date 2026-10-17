@@ -120,5 +120,138 @@ class SubagentTests(ClineScannerTestCase):
         self.assertEqual(result["todayTotalTokens"], 0)
 
 
+SCHEMA_V2 = """
+CREATE TABLE sessions (
+    session_id TEXT PRIMARY KEY,
+    model TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT '',
+    is_subagent INTEGER NOT NULL DEFAULT 0,
+    messages_path TEXT,
+    metadata_json TEXT
+)
+"""
+
+
+def local_ms(*args):
+    return int(dt.datetime(*args).astimezone().timestamp() * 1000)
+
+
+def cline_msg(mid, ts, model_id, input_t=0, output_t=0, cache_read=0, cache_write=0):
+    return {
+        "id": mid,
+        "role": "assistant",
+        "content": [{"type": "text", "text": "x"}],
+        "ts": ts,
+        "modelInfo": {"id": model_id, "provider": "cline"},
+        "metrics": {
+            "inputTokens": input_t,
+            "outputTokens": output_t,
+            "cacheReadTokens": cache_read,
+            "cacheWriteTokens": cache_write,
+        },
+    }
+
+
+class MessageFileTests(unittest.TestCase):
+    def setUp(self):
+        self._old_tz = os.environ.get("TZ")
+        self._tmp = tempfile.TemporaryDirectory()
+        self.db_path = Path(self._tmp.name) / "sessions.db"
+        self.conn = sqlite3.connect(self.db_path)
+        self.conn.executescript(SCHEMA_V2)
+        self.conn.commit()
+
+    def tearDown(self):
+        self.conn.close()
+        self._tmp.cleanup()
+        if self._old_tz is None:
+            os.environ.pop("TZ", None)
+        else:
+            os.environ["TZ"] = self._old_tz
+        time.tzset()
+
+    def use_zone(self, zone):
+        os.environ["TZ"] = zone
+        time.tzset()
+
+    def write_messages(self, sid, messages):
+        path = Path(self._tmp.name) / f"{sid}.messages.json"
+        path.write_text(json.dumps({"messages": messages}))
+        return str(path)
+
+    def add_session(self, sid, model, started_at, metadata, messages_path=None):
+        self.conn.execute(
+            "INSERT INTO sessions (session_id, model, started_at, messages_path, metadata_json)"
+            " VALUES (?, ?, ?, ?, ?)",
+            (sid, model, started_at, messages_path, metadata),
+        )
+        self.conn.commit()
+
+    def test_multiday_session_split_by_message_day_and_model(self):
+        # Started Sep 26, active again Sep 29 with a different model.
+        self.use_zone("UTC")
+        now = dt.datetime(2026, 9, 29, 12, 0)
+        meta = usage_meta(input_t=3000, output_t=300)
+        path = self.write_messages("s1", [
+            cline_msg("m1", local_ms(2026, 9, 26, 10, 0), "model-a", input_t=1000),
+            cline_msg("m2", local_ms(2026, 9, 26, 11, 0), "model-a", output_t=100),
+            cline_msg("m3", local_ms(2026, 9, 29, 9, 0), "model-b", input_t=2000, output_t=200),
+        ])
+        self.add_session("s1", "model-a", "2026-09-26T09:00:00+00:00", meta, path)
+        result = scanner.scan(self.db_path, now=now)
+        self.assertEqual(result["todayTotalTokens"], 2200)
+        self.assertEqual(result["todaySessions"], 1)
+        self.assertEqual(result["todayTokensByModel"], {"model-b": 2200})
+        days = {d["date"]: d["totalTokens"] for d in result["recentDays"]}
+        self.assertEqual(days["2026-09-29"], 2200)
+        self.assertEqual(days["2026-09-26"], 1100)
+        # All-time still comes from session metadata.
+        self.assertIn("model-a", result["modelUsage"])
+
+    def test_fork_copies_counted_once(self):
+        self.use_zone("UTC")
+        now = dt.datetime(2026, 9, 29, 12, 0)
+        parent_msgs = [
+            cline_msg("m1", local_ms(2026, 9, 29, 9, 0), "model-a", input_t=1000),
+        ]
+        fork_msgs = parent_msgs + [
+            cline_msg("m2", local_ms(2026, 9, 29, 10, 0), "model-a", input_t=500),
+        ]
+        p1 = self.write_messages("parent", parent_msgs)
+        p2 = self.write_messages("fork", fork_msgs)
+        self.add_session("parent", "model-a", "2026-09-29T08:00:00+00:00",
+                         usage_meta(input_t=1000), p1)
+        self.add_session("fork", "model-a", "2026-09-29T09:30:00+00:00",
+                         usage_meta(input_t=1500), p2)
+        result = scanner.scan(self.db_path, now=now)
+        self.assertEqual(result["todayTotalTokens"], 1500)
+        self.assertEqual(result["todaySessions"], 2)
+
+    def test_partial_file_capped_at_session_aggregate(self):
+        self.use_zone("UTC")
+        now = dt.datetime(2026, 9, 29, 12, 0)
+        path = self.write_messages("s1", [
+            cline_msg("m1", local_ms(2026, 9, 29, 9, 0), "model-a", input_t=4000),
+        ])
+        self.add_session("s1", "model-a", "2026-09-29T08:00:00+00:00",
+                         usage_meta(input_t=1000), path)
+        result = scanner.scan(self.db_path, now=now)
+        self.assertEqual(result["todayTotalTokens"], 1000)
+
+    def test_missing_file_falls_back_to_started_at(self):
+        self.use_zone("UTC")
+        now = dt.datetime(2026, 9, 29, 12, 0)
+        self.add_session("s1", "model-a", "2026-09-29T08:00:00+00:00",
+                         usage_meta(input_t=700), "/nonexistent/file.json")
+        import contextlib
+        import io
+
+        with contextlib.redirect_stderr(io.StringIO()):
+            result = scanner.scan(self.db_path, now=now)
+        self.assertEqual(result["todayTotalTokens"], 700)
+        self.assertEqual(result["todayTokensByModel"], {"model-a": 700})
+
+
 if __name__ == "__main__":
     unittest.main()

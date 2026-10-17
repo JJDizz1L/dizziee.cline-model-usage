@@ -16,7 +16,8 @@ Item {
     readonly property int refreshIntervalSec: Math.max(30, Number(root.setting("refreshIntervalSec", 300)))
 
     // Background refresh keeps the bar chip current. Each scan is a read-only
-    // query of about 50 ms, so the interval is the only steady-state cost.
+    // DB query plus a few small message-file reads, so the interval is the
+    // only steady-state cost.
     Timer {
         interval: root.refreshIntervalSec * 1000
         running: true

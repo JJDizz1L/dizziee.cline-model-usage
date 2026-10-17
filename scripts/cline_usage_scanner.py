@@ -37,6 +37,117 @@ def number(value: Any) -> int:
         return 0
 
 
+def session_columns(conn: sqlite3.Connection) -> set[str]:
+    try:
+        return {row[1] for row in conn.execute("PRAGMA table_info(sessions)")}
+    except Exception:
+        return set()
+
+
+def message_events(
+    path: str, seen_ids: set[str]
+) -> tuple[list[tuple[int, str, int]], int]:
+    """Per-message (ts_ms, model, tokens) from a Cline messages file.
+
+    Message ids are deduped globally: forked sessions copy their parent's
+    messages file, and counting both copies would double-count. Returns the
+    events plus the file's total token sum (used to cap day attribution at
+    the session's aggregate total).
+    """
+    events: list[tuple[int, str, int]] = []
+    file_total = 0
+    with open(path, "r", encoding="utf-8") as handle:
+        data = json.load(handle)
+    messages = data.get("messages", [])
+    if not isinstance(messages, list):
+        return (events, file_total)
+    for message in messages:
+        if not isinstance(message, dict):
+            continue
+        mid = message.get("id")
+        if mid is None or mid in seen_ids:
+            continue
+        seen_ids.add(mid)
+        metrics = message.get("metrics") or {}
+        if not isinstance(metrics, dict):
+            continue
+        total = (
+            number(metrics.get("inputTokens"))
+            + number(metrics.get("outputTokens"))
+            + number(metrics.get("cacheReadTokens"))
+            + number(metrics.get("cacheWriteTokens"))
+        )
+        if total <= 0:
+            continue
+        try:
+            ts = int(message.get("ts") or 0)
+        except Exception:
+            continue
+        if ts <= 0:
+            continue
+        model_info = message.get("modelInfo") or {}
+        model = model_info.get("id") if isinstance(model_info, dict) else None
+        events.append((ts, str(model) if model else "", total))
+        file_total += total
+    return (events, file_total)
+
+
+def day_of(ts_ms: int) -> str | None:
+    try:
+        return date_string(
+            dt.datetime.fromtimestamp(ts_ms / 1000).astimezone().date()
+        )
+    except Exception:
+        return None
+
+
+def attribute_days_from_messages(
+    sessions: list[tuple[str, str, str, int]],
+    file_paths: dict[str, str],
+    recent: dict[str, dict[str, Any]],
+    today: str,
+    today_sessions: set[str],
+    today_tokens_by_model: dict[str, int],
+) -> set[str]:
+    """Attribute session totals to days using per-message timestamps.
+
+    A session's whole total bucketed on started_at misattributes every
+    session that spans midnight (12 such sessions in the wild, including a
+    650M-token one). Messages carry their own ts plus the model that
+    actually produced them, fixing day and per-model attribution at once.
+    Returns the session ids whose files parsed OK (the rest fall back to
+    started_at bucketing).
+    """
+    handled: set[str] = set()
+    seen_ids: set[str] = set()
+    for session_id, model, _started_day, total in sessions:
+        path = file_paths.get(session_id)
+        if not path:
+            continue
+        try:
+            events, file_total = message_events(path, seen_ids)
+        except Exception as exc:
+            print(f"Error reading cline messages file {path}: {exc}", file=sys.stderr)
+            continue
+        handled.add(session_id)
+        if not events or total <= 0:
+            continue
+        scale = total / file_total if file_total > total else 1.0
+        for ts, msg_model, toks in events:
+            day = day_of(ts)
+            if day is None or day not in recent:
+                continue
+            amount = int(toks * scale)
+            key_model = msg_model or model
+            recent[day]["totalTokens"] += amount
+            if day == today:
+                today_sessions.add(session_id)
+                today_tokens_by_model[key_model] = (
+                    today_tokens_by_model.get(key_model, 0) + amount
+                )
+    return handled
+
+
 def parse_iso_date(iso_string: str) -> dt.date | None:
     if not iso_string:
         return None
@@ -78,6 +189,10 @@ def scan(db_path: Path, now: dt.datetime | None = None) -> dict[str, Any]:
               AND started_at IS NOT NULL
         """)
 
+        # All-time aggregates come from session metadata (authoritative
+        # totals). Day attribution prefers per-message data below.
+        sessions: list[tuple[str, str, str, int]] = []
+
         for row in cursor:
             session_id = str(row["session_id"])
             model = str(row["model"] or "unknown")
@@ -118,13 +233,42 @@ def scan(db_path: Path, now: dt.datetime | None = None) -> dict[str, Any]:
             bucket["cacheReadInputTokens"] += cache_read
             bucket["cacheCreationInputTokens"] += cache_write
 
-            if day in recent:
-                recent[day]["totalTokens"] += total
+            sessions.append((session_id, model, day, total))
 
-            if day == today:
-                today_sessions.add(session_id)
-                today_total_tokens += total
-                today_tokens_by_model[model] = today_tokens_by_model.get(model, 0) + total
+        has_message_paths = "messages_path" in session_columns(conn)
+        file_paths: dict[str, str] = {}
+        if has_message_paths:
+            for sid, path in conn.execute(
+                "SELECT session_id, messages_path FROM sessions"
+                " WHERE is_subagent = 0 AND messages_path IS NOT NULL AND messages_path != ''"
+            ):
+                file_paths[str(sid)] = str(path)
+
+        if file_paths:
+            handled = attribute_days_from_messages(
+                sessions, file_paths, recent, today,
+                today_sessions, today_tokens_by_model,
+            )
+            # Sessions without a usable messages file keep the legacy
+            # behavior: whole total on the started_at day.
+            for session_id, model, day, total in sessions:
+                if session_id in handled:
+                    continue
+                if day in recent:
+                    recent[day]["totalTokens"] += total
+                if day == today:
+                    today_sessions.add(session_id)
+                    today_tokens_by_model[model] = today_tokens_by_model.get(model, 0) + total
+            today_total_tokens = sum(today_tokens_by_model.values())
+        else:
+            for session_id, model, day, total in sessions:
+                if day in recent:
+                    recent[day]["totalTokens"] += total
+
+                if day == today:
+                    today_sessions.add(session_id)
+                    today_total_tokens += total
+                    today_tokens_by_model[model] = today_tokens_by_model.get(model, 0) + total
 
         conn.close()
     except Exception as exc:
