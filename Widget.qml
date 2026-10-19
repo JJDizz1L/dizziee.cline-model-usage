@@ -591,6 +591,7 @@ BarWidget {
       }
       Repeater {
         model: {
+          if (!root.popupOpen) return []
           var toks = provider ? (provider.todayTokensByModel || {}) : {}
           var out = []
           for (var k in toks) out.push({ modelId: k, count: toks[k] })
@@ -617,7 +618,7 @@ BarWidget {
       width: parent.width
       spacing: 6
       Repeater {
-        model: provider ? provider.recentDays : []
+        model: root.popupOpen && provider ? provider.recentDays : []
         delegate: RowLayout {
           required property var modelData
           Layout.fillWidth: true
@@ -690,6 +691,7 @@ BarWidget {
       PanelSeparator { Layout.fillWidth: true; foreground: root.foreground; strength: 0.18 }
       Repeater {
         model: {
+          if (!root.popupOpen) return []
           var usage = provider ? (provider.modelUsage || {}) : {}
           var out = []
           for (var k in usage) out.push({ modelId: k, data: usage[k] })
