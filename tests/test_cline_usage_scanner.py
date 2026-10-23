@@ -120,6 +120,62 @@ class SubagentTests(ClineScannerTestCase):
         self.assertEqual(result["todayTotalTokens"], 0)
 
 
+class ScanOutcomeTests(ClineScannerTestCase):
+    def test_success_records_scan_identity(self):
+        self.use_zone("UTC")
+        now = dt.datetime(2026, 10, 8, 12, 0)
+        self.add_session("a", "2026-10-08T10:00:00+00:00", usage_meta(input_t=300))
+        result = scanner.scan(self.db_path, now=now)
+        self.assertTrue(result["ready"])
+        self.assertEqual(result["scope"], "device")
+        self.assertGreater(result["scannedAt"], 0)
+
+    def test_missing_database_is_empty_not_an_error(self):
+        self.use_zone("UTC")
+        now = dt.datetime(2026, 10, 8, 12, 0)
+        missing = Path(self._tmp.name) / "missing.db"
+        result = scanner.scan(missing, now=now)
+        self.assertTrue(result["ready"])
+        self.assertFalse(result["hasLocalStats"])
+        self.assertEqual(result["totalSessions"], 0)
+        self.assertGreater(result["scannedAt"], 0)
+
+    def test_locked_database_is_an_error_record_without_zeroed_stats(self):
+        self.use_zone("UTC")
+        now = dt.datetime(2026, 10, 8, 12, 0)
+        self.add_session("a", "2026-10-08T10:00:00+00:00", usage_meta(input_t=300))
+
+        real_connect = scanner.sqlite3.connect
+
+        def locked(*args, **kwargs):
+            raise scanner.sqlite3.OperationalError("database is locked")
+
+        scanner.sqlite3.connect = locked
+        try:
+            import contextlib
+            import io
+
+            with contextlib.redirect_stderr(io.StringIO()):
+                result = scanner.scan(self.db_path, now=now)
+        finally:
+            scanner.sqlite3.connect = real_connect
+
+        self.assertFalse(result["ready"])
+        self.assertTrue(result["retryAdvised"])
+        self.assertIn("database is locked", result["error"])
+        self.assertNotIn("todayTotalTokens", result)
+        self.assertNotIn("modelUsage", result)
+        self.assertGreater(result["scannedAt"], 0)
+
+    def test_total_sessions_counts_each_session_once_across_models(self):
+        self.use_zone("UTC")
+        now = dt.datetime(2026, 10, 8, 12, 0)
+        self.add_session("a", "2026-10-08T10:00:00+00:00", usage_meta(input_t=100), model="model-a")
+        self.add_session("b", "2026-10-08T11:00:00+00:00", usage_meta(input_t=200), model="model-b")
+        result = scanner.scan(self.db_path, now=now)
+        self.assertEqual(result["totalSessions"], 2)
+
+
 SCHEMA_V2 = """
 CREATE TABLE sessions (
     session_id TEXT PRIMARY KEY,

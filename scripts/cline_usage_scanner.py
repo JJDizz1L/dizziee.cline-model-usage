@@ -9,6 +9,7 @@ import json
 import os
 import sqlite3
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -171,7 +172,7 @@ def scan(db_path: Path, now: dt.datetime | None = None) -> dict[str, Any]:
     model_usage: dict[str, dict[str, int]] = {}
 
     if not db_path.exists():
-        return empty_result()
+        return empty_result(now)
 
     try:
         conn = sqlite3.connect(f"{db_path.as_uri()}?mode=ro", uri=True, timeout=5)
@@ -272,11 +273,15 @@ def scan(db_path: Path, now: dt.datetime | None = None) -> dict[str, Any]:
 
         conn.close()
     except Exception as exc:
+        # A locked or unreadable database is temporary, not an empty history.
+        # The widget keeps its last good numbers and shows a stale marker.
         print(f"Error querying cline db: {exc}", file=sys.stderr)
-        return empty_result()
+        return error_result(str(exc))
 
     return {
         "schemaVersion": 1,
+        "scope": "device",
+        "scannedAt": int(time.time()),
         "todaySessions": len(today_sessions),
         "todayTotalTokens": today_total_tokens,
         "todayTokensByModel": today_tokens_by_model,
@@ -292,6 +297,8 @@ def empty_result(now: dt.datetime | None = None) -> dict[str, Any]:
     recent_dates = recent_date_strings(now or dt.datetime.now())
     return {
         "schemaVersion": 1,
+        "scope": "device",
+        "scannedAt": int(time.time()),
         "todaySessions": 0,
         "todayTotalTokens": 0,
         "todayTokensByModel": {},
@@ -300,6 +307,17 @@ def empty_result(now: dt.datetime | None = None) -> dict[str, Any]:
         "totalSessions": 0,
         "ready": True,
         "hasLocalStats": False,
+    }
+
+
+def error_result(message: str, retry_advised: bool = True) -> dict[str, Any]:
+    return {
+        "schemaVersion": 1,
+        "scope": "device",
+        "scannedAt": int(time.time()),
+        "ready": False,
+        "error": message,
+        "retryAdvised": retry_advised,
     }
 
 

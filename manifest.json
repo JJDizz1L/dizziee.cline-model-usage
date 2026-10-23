@@ -2,11 +2,13 @@
   "schemaVersion": 1,
   "id": "dizziee.cline-model-usage",
   "name": "Cline Usage",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "author": "Dizziee",
   "license": "MIT",
   "description": "Cline usage stats in the Omarchy bar.",
-  "kinds": ["bar-widget"],
+  "kinds": [
+    "bar-widget"
+  ],
   "activation": "on-demand",
   "entryPoints": {
     "barWidget": "Widget.qml"
@@ -17,7 +19,7 @@
     "category": "AI",
     "allowMultiple": false,
     "defaults": {
-      "refreshIntervalSec": 300
+      "refreshIntervalSec": 900
     },
     "schema": [
       {
@@ -27,7 +29,7 @@
         "min": 30,
         "max": 3600,
         "step": 30,
-        "defaultValue": 300
+        "defaultValue": 900
       }
     ]
   }
