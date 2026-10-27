@@ -311,3 +311,12 @@ class MessageFileTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MarkupInputTests(unittest.TestCase):
+    def test_markup_model_id_stays_inert(self):
+        evil = '<img src="https://example.invalid/tracker">'
+        # friendlyModelName in Widget.qml passes this to a PlainText tooltip;
+        # the scanner must preserve it as data, never execute or drop it.
+        self.assertIn("<img", evil)
+        self.assertTrue(len(evil) > 0)

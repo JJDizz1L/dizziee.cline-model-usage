@@ -162,7 +162,7 @@ BarWidget {
     if (String(date || "") === root.todayKey()) return strings.t("cline.today")
     var parsed = new Date(String(date || "") + "T00:00:00")
     if (isNaN(parsed.getTime())) return String(date || "")
-    return root.dayName(date) + " " + String(parsed.getMonth() + 1).padStart(2, "0") + "/" + String(parsed.getDate()).padStart(2, "0")
+    return root.dayName(date) + " " + Commons.I18n.formatNumber(parsed.getMonth() + 1) + "/" + Commons.I18n.formatNumber(parsed.getDate())
   }
 
   function dayTooltip(day) {
@@ -757,7 +757,7 @@ BarWidget {
       RowLayout {
         Layout.fillWidth: true
         spacing: 20
-        StatBlock { value: provider ? String(provider.todaySessions || 0) : "0"; label: strings.t("cline.sessions") }
+        StatBlock { value: provider ? Commons.I18n.formatNumber(provider.todaySessions || 0) : Commons.I18n.formatNumber(0); label: strings.t("cline.sessions") }
         StatBlock { value: provider ? usageMain.formatTokenCount(provider.todayTotalTokens || 0) : "0"; label: strings.t("cline.tokens") }
       }
       Repeater {
@@ -903,7 +903,7 @@ BarWidget {
       RowLayout {
         Layout.fillWidth: true
         spacing: 20
-        StatBlock { value: provider ? String(provider.totalSessions || 0) : "0"; label: strings.t("cline.sessions") }
+        StatBlock { value: provider ? Commons.I18n.formatNumber(provider.totalSessions || 0) : Commons.I18n.formatNumber(0); label: strings.t("cline.sessions") }
       }
       PanelSeparator { Layout.fillWidth: true; foreground: root.foreground; strength: 0.18 }
 
