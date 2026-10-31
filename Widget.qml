@@ -853,7 +853,7 @@ BarWidget {
                 width: parent.width * (dayRow.count / weekCard.maxCount)
                 color: dayRow.today ? foreground : root.alpha(foreground, 0.55)
                 radius: Math.max(1, Style.cornerRadius / 3)
-                Behavior on width { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
+                Behavior on width { NumberAnimation { duration: Style.duration(160); easing.type: Easing.OutCubic } }
               }
             }
             Text {
@@ -931,7 +931,7 @@ BarWidget {
             width: parent.width * root.clamp(modelRow.share, 0, 1)
             radius: Style.cornerRadius
             color: root.alpha(foreground, 0.14)
-            Behavior on width { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
+            Behavior on width { NumberAnimation { duration: Style.duration(160); easing.type: Easing.OutCubic } }
           }
           Text {
             id: modelName
